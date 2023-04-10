@@ -1,0 +1,128 @@
+---
+title: "hw4_regression-classification_trees"
+author: "Cary Ni"
+date: "2023-04-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(caret)
+library(rpart)
+library(ranger)
+library(gbm)
+library(rpart.plot)
+library(ISLR2)
+knitr::opts_chunk$set(echo = TRUE)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+```
+
+## Problem 1
+
+```{r}
+# load dataset
+college_df = read_csv("College.csv", show_col_types = FALSE) %>% 
+  janitor::clean_names() %>% 
+  select(-college) %>% 
+  na.omit()
+
+# data partition
+set.seed(2023)
+index_train = createDataPartition(y = college_df$outstate, p = 0.8, list = FALSE)
+```
+
+### Recursive Partitioning and Regression Trees
+
+```{r}
+# set train method
+ctrl_1 = trainControl(method = "cv", number = 10)
+set.seed(1)
+rpart_model = train(outstate ~ . ,
+                   data = college_df,
+                   subset = index_train,
+                   method = "rpart",
+                   tuneGrid = data.frame(cp = exp(seq(-6,-2, length = 50))),
+                   trControl = ctrl_1)
+ggplot(rpart_model, highlight = TRUE)
+# Create a plot of the selected tree
+rpart.plot(rpart_model$finalModel)
+```
+
+### Random Forest Regression
+
+```{r}
+# For number of predictors included in each tree, p/3 and sqrt{p} are commonly selected. For 17 predictors in this model, the tunning range of mtry will be 3:9, which includes the values above. Min.node size will be 2:6 considering the small number of observations. 
+set.seed(1)
+rf_grid = expand.grid(mtry = 3:9,
+                       splitrule = "variance",
+                       min.node.size = 2:6)
+rf_model = train(outstate ~ . ,
+               data = college_df[index_train,],
+               method = "ranger",
+               tuneGrid = rf_grid,
+               trControl = ctrl_1)
+ggplot(rf_model, highlight = TRUE)
+```
+
+#### Variable importance and test MSE of Random Forest
+
+```{r}
+set.seed(1)
+rf_model_final = ranger(outstate ~ . ,
+                        data = college_df[index_train,],
+                        mtry = rf_model$bestTune[[1]],
+                        splitrule = "variance",
+                        min.node.size = rf_model$bestTune[[3]],
+                        importance = "impurity")
+barplot(sort(ranger::importance(rf_model_final), decreasing = FALSE),
+        las = 2, horiz = TRUE, cex.names = 0.7,
+        col = colorRampPalette(colors = c("cyan","blue"))(16))
+
+# test mse of final model from ranger 
+pred_y = predict(rf_model_final, college_df[-index_train,])
+mean((college_df[-index_train,]$outstate-pred_y$predictions)^2)
+# OR test mse of final model from caret 
+# pred_z = predict(rf_model, college_df[-index_train,])
+# mean((college_df[-index_train,]$outstate-pred_z)^2)
+```
+
+`expend` is the most important variable which accounts most reduction to the loss function given this set of predictors. `room_board`, `terminal`, and `ph_d` are followed. The test MSE is 2090869. 
+
+### Boosting regression
+
+```{r}
+set.seed(1)
+# learning rate selection criterion : max(0.01, 0.1*(min(1, nl/10000)))
+gbm_grid = expand.grid(n.trees = c(seq(200, 1200, by = 100)),
+                       interaction.depth = 1:3,
+                       shrinkage = 0.01,
+                       n.minobsinnode = c(3,5))
+gbm_model = train(outstate ~ . ,
+                  data = college_df[index_train,],
+                  method = "gbm",
+                  trControl = ctrl_1,
+                  tuneGrid = gbm_grid,
+                  verbose = FALSE)
+ggplot(gbm_model, highlight = TRUE)
+```
+
+#### Variable importance and test MSE of Boosting Model
+
+```{r}
+var_df = summary(gbm_model$finalModel, las = 2, cBars = 19, cex.names = 0.6)
+var_df %>% 
+  as.data.frame() %>% 
+  select(-var) %>% 
+  knitr::kable()
+# test mse of final model from caret 
+pred_z = predict(gbm_model, college_df[-index_train,])
+mean((college_df[-index_train,]$outstate-pred_z)^2)
+```
+
+`expend` and `room_board` are the most important variable which accounts for more than 56% and 12% of the reduction to the loss function given this set of predictors. The test MSE is 1827409. 
+
+## Problem 2
+```{r}
+data(OJ)
+```
+
