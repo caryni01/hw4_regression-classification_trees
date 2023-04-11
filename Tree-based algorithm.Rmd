@@ -1,7 +1,8 @@
 ---
-title: "hw4_regression-classification_trees"
-author: "Cary Ni"
-output: github_document
+title: "Hw4 regression/classification trees"
+output:
+  pdf_document:
+    latex_engine: xelatex
 ---
 
 ```{r setup, include=FALSE}
@@ -12,7 +13,10 @@ library(ranger)
 library(gbm)
 library(rpart.plot)
 library(ISLR2)
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.align = 'center',
+  strip.white = TRUE)
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
 
@@ -108,6 +112,7 @@ ggplot(gbm_model, highlight = TRUE)
 #### Variable importance and test MSE of Boosting Model
 
 ```{r}
+par(mfrow = c(1, 1))
 var_df = summary(gbm_model$finalModel, las = 2, cBars = 16, cex.names = 0.6)
 var_df %>% 
   as.data.frame() %>% 
@@ -145,7 +150,6 @@ rpart.plot(tree2)
 # tree size based on 1SE rule
 tree4 = prune(tree1, cp = cpTable[cpTable[,4]< cpTable[minErr,4]+cpTable[minErr,5],1][1])
 rpart.plot(tree4)
-
 ```
 
 (a) The tree with lowest cross-validation error has a size of 5, which is different from the tree size of 2 based on the selection of 1 SE rule. 
@@ -178,9 +182,10 @@ ggplot(gbmA_model, highlight = TRUE)
 #### Variable importance of Adaptive boosting classfier
 
 ```{r}
+par(mfrow = c(1, 1))
 # show relative importance of 10 most important variables
-var_df_2 = summary(gbmA_model$finalModel, las = 2, cBars = 10, cex.names = 0.6)
-var_df_2 %>% 
+var_df = summary(gbmA_model$finalModel, las = 2, cBars = 10, cex.names = 0.6) 
+var_df %>% 
   as.data.frame() %>% 
   select(-var) %>% 
   knitr::kable()
